@@ -1,9 +1,10 @@
+```
   ____     ____   ____ _____   ____  
  / / /    | __ ) / ___|  ___|  \ \ \ 
 / / /_____|  _ \| |  _| |_ _____\ \ \
 \ \ \_____| |_) | |_| |  _|_____/ / /
  \_\_\    |____/ \____|_|      /_/_/ 
-
+```
 
 * Uni project to create an extensible boardgame framework for any 2 player boardgame.
 * Uses OO design patterns and principles in designing the framework.
