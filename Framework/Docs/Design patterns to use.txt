@@ -1,0 +1,12 @@
+// [MermaidChart: 944439ac-d88b-4bac-8cb5-bac02b942da5]
+Factory Method    (c)
+Abstract Factory  (c)
+Singleton	  (c)
+
+Template	  (b)
+Strategy	  (b)
+Command		  (b)
+Observer	  (b)
+
+Composite	  (s)
+

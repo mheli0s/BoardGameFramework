@@ -1,0 +1,35 @@
+--Framework (project root):
+Program.cs
+--Framework.Core files:
+BoardGameFramework.cs
+BoardSquare.cs (abstract)
+ComputerPlayer.cs
+ConsoleUI.cs
+FrameworkMenuOptions.cs (enum)
+GameController.cs
+GameFactory.cs
+GameMode.cs (enum)
+GameState.cs
+GameStatus.cs (enum)
+GameType.cs (enum)
+HumanPlayer.cs
+IBoard.cs
+IBoardGame.cs
+IGameFactory.cs (uses abstract factory pattern abstract factory maker class interface)
+IGameRules.cs
+IMove.cs
+IMoveStrategy.cs
+IGameSerializer.cs
+InputValidator.cs 
+IPiece.cs
+MoveHistory.cs
+Player.cs (abstract)
+RandomMoveStrategy.cs (will use strategy design pattern)
+--Framework.NumTicTacToe files:
+NumTicTacToeFactory.cs (uses abstract factory pattern concrete factory maker class) 
+NumTicTacToeGame.cs (uses factory method pattern to create components eg board,piece)
+NumTicTacToeBoard.cs
+NumTicTacToeMove.cs
+NumTicTacToePiece.cs
+NumTicTacToeSquare.cs
+NumTicTacToeRules.cs

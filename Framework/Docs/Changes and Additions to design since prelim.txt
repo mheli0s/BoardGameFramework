@@ -1,0 +1,12 @@
+Changes/Additions to design since prelim:
+
+•	Added InputValidator class
+•	Added FrameworkMenuOptions enum
+•	GameFactory is now IGameFactory interface (for abstract factory pattern)
+•	Added NumTicTacToeFactory class (for abstract factory pattern)
+•	Added GameType enum (eg. NUMTICTACTOE, CHESS etc)
+•	Added GameMode enum (HUMANVSCOMPUTER,HUMANVSHUMAN,COMPUTERVSCOMPUTER
+•	Change BoardSquare to BoardSquare<T>
+•	Change IRules to IGameRules
+•	Change NumTPiece to NumTicTacToePiece (uniformity)
+•	Added IBoardSquare interface

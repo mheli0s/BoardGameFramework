@@ -1,0 +1,16 @@
+In-Game state representation:
+-----------------------------
+
+Turn#, Board Snapshot, Current Player Turn
+
+1, <<empty,empty,empty,5,empty,empty,empty,empty,empty>, Computer>
+2, <<empty,empty,empty,5,empty,empty,8,empty,empty>, Human>
+3, <<7,empty,empty,5,empty,empty,8,empty,empty>, Computer>
+
+
+Saved-to-disk state representation (saved after 3 turns):
+---------------------------------------------------------
+
+Turn#, Board Snapshot, Current Player Turn
+
+3, <<7,empty,empty,5,empty,empty,8,empty,empty>, Computer> 
