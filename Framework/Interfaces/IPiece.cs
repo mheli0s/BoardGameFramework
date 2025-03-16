@@ -7,7 +7,7 @@ public interface IPiece
 {
     // common properties all pieces must have
     object Value { get; } // base object type allows any piece value type for extensibility
-    Player Owner { get; }
+    Player Owner { get; internal set; }
 }
 
 

@@ -130,7 +130,7 @@ public class ConsoleUI
         Console.SetCursorPosition(0, 0); // place it at the top of the screen
         Console.ForegroundColor = ConsoleColor.Gray;
         Console.WriteLine();
-        Console.WriteLine("| In-game commands: [u]ndo, [r]edo, [s]ave current game, [h]elp, [q]uit |");
+        Console.WriteLine("| In-game commands: [u]ndo, [r]edo, [s]ave game, [h]elp, [f]inish undo/redo, [q]uit |");
         Console.ResetColor();
         Console.WriteLine("\n");
     }
@@ -139,7 +139,7 @@ public class ConsoleUI
     internal static void DisplayGameRules(IGameFactory gameFactory)
     {
         DisplayInfoMessage(gameFactory.CreateGameRulesInfo());  // Calls the factory method for rules text
-        Console.WriteLine("Press any key to return to game menu.");
+        Console.WriteLine("\nPress any key to return to game menu.");
         Console.ReadKey(intercept: false); // don't display key pressed in console
     }
 
@@ -275,6 +275,10 @@ public class ConsoleUI
                             the game to continue playing at a later time.
         - 'h': Help menu   -
                             Displays this help page.
+        - 'f': Finish undo/redo - 
+                            Indicates to the program that no further undo/redo opoerations are desired 
+                            and the gameplay can continue with an automatic move by the computer or the
+                            human inputting a new move into the prompt.
         - 'q': Quit a game -
                             Quits the current game without saving and returns to the main menu.
         """;
@@ -332,7 +336,7 @@ public class ConsoleUI
 
             if (!InputValidator.IsValidGameMenuOption(input, out menuChoice))
             {
-                DisplayPausedErrorMessage("\nInvalid input, enter an option between 0 - 3\n");
+                DisplayErrorMessage("\nInvalid input, enter an option between 0 - 3\n");
                 Thread.Sleep(1500); // delay execution to allow time for user to read any error messages
                 continue;
             }

@@ -23,19 +23,19 @@ public abstract class Player(string name, int id)
     // for computer players
     internal virtual IMove GetMove(IBoard board)
     {
-        throw new NotImplementedException("Not supported by this player type.");
+        throw new NotImplementedException($"Computer's GetMove is not supported by player type {GetType().Name}.");
     }
 
     // for human players - allows for flexible move input formats
     internal virtual IMove GetMove(string[] moveParts, Player currentPlayer)
     {
-        throw new NotImplementedException("Not supported by this player type.");
+        throw new NotImplementedException($"Human's GetMove is not supported by player type {GetType().Name}.");
     }
 
     // for a fixed human move input format
     internal virtual IMove GetMove(int row, int col, int value)
     {
-        throw new NotImplementedException("Not supported by this player type.");
+        throw new NotImplementedException($"Generic GetMove is not supported by player type {GetType().Name}.");
     }
 
     public virtual bool UsePiece(int value)
@@ -65,11 +65,15 @@ public abstract class Player(string name, int id)
             _ => throw new InvalidOperationException($"Unknown player type: {GetType().Name}")
         };
 
-        // also clone the remaining pieces needed to restart a saved game with
-        clonedPlayer._remainingPieces = _remainingPieces
-                                        .Select(p => BoardGameFramework.GetFactory()
-                                        .CreatePiece((int)p.Value, clonedPlayer))
-                                        .ToList();
+        // clear any existing pieces first to avoid duplicates
+        clonedPlayer._remainingPieces.Clear();
+
+        // clone the remaining pieces needed to restart a saved game with using the factory
+        foreach (var piece in _remainingPieces)
+        {
+            var clonedPiece = BoardGameFramework.GetFactory().CreatePiece((int)piece.Value, clonedPlayer);
+            clonedPlayer._remainingPieces.Add(clonedPiece);
+        }
 
         return clonedPlayer;
     }

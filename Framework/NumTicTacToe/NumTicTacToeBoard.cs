@@ -84,13 +84,14 @@ public class NumTicTacToeBoard : IBoard
         {
             for (int col = 0; col < Size; col++)
             {
-                var originalSquare = GetNumTPieceSquare(row, col);
-                var clonedSquare = clonedBoard.GetNumTPieceSquare(row, col);
+                var originalSquare = GetSquare(row, col);
+                var clonedSquare = clonedBoard.GetSquare(row, col);
 
+                // if the original square has a piece, clone it and set it on the new square
                 if (originalSquare.IsOccupied && originalSquare.Piece != null)
                 {
                     var clonedPiece = BoardGameFramework.GetFactory()
-                                        .CreatePiece(originalSquare.Piece.Value, originalSquare.Piece.Owner);
+                                                        .CreatePiece((int)originalSquare.Piece.Value, originalSquare.Piece.Owner);
                     clonedSquare.SetPiece((NumTPiece)clonedPiece);
                 }
             }

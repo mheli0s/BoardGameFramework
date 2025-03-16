@@ -132,6 +132,8 @@ public sealed class BoardGameFramework
                     StartSavedGame();
                     break;
                 case 3:
+                    // create the factory if it doesn't exist yet
+                    _gameFactory ??= CreateFactory(GameType.NUMTICTACTOE);
                     if (_gameFactory != null)
                     {
                         ConsoleUI.DisplayGameRules(_gameFactory);
@@ -158,12 +160,27 @@ public sealed class BoardGameFramework
         */
         try
         {
+            string saveDirectory = "Game_saves";
             string filename = _gameState.SerializedSnapshotFilename ?? string.Empty;
 
+            // if specific file doesn't exist, try to find any snapshot file in the directory
             if (!File.Exists(filename))
             {
-                ConsoleUI.DisplayPausedErrorMessage("No saved game file found.");
-                return;
+                if (Directory.Exists(saveDirectory))
+                {
+                    var files = Directory.GetFiles(saveDirectory, "*-Snapshot.txt");
+                    if (files.Length > 0)
+                    {
+                        filename = files[0]; // take the first snapshot found
+                    }
+                }
+
+                // still no file found
+                if (!File.Exists(filename))
+                {
+                    ConsoleUI.DisplayPausedErrorMessage("No saved game file found.");
+                    return;
+                }
             }
             // get game type from filename eg. NumTicTacToeGame-GameSnapshot.txt -> NumTicTacToeGame
             string gameTypeString = Path.GetFileName(filename).Split('-')[0]
@@ -171,18 +188,29 @@ public sealed class BoardGameFramework
                                         .ToUpper();          // convert to match enum case format
 
             // create the factory matching parsed game type, load saved game and setup state data
-            if (Enum.TryParse<GameType>(gameTypeString, ignoreCase: true, out GameType savedGameType))
+            if (Enum.TryParse(gameTypeString, ignoreCase: true, out GameType savedGameType))
             {
                 _gameFactory = CreateFactory(savedGameType);
-                _gameState.LoadGame(); // populate the board with saved state and reset move history
                 // create game components needed to restart a save game
                 _game = _gameFactory
                             .CreateBoardGame(_gameState.GameMode == GameMode.HumanVsComputer, _gameState);
 
+                _gameState.Load(); // populate the board with saved state and reset move history
+
+                // Make sure the board displays after loading
+                if (_game != null && _game.Board != null)
+                {
+                    Console.Clear();
+                    ConsoleUI.DisplayBoard(_game.Board);
+                }
+                else
+                {
+                    ConsoleUI.DisplayErrorMessage("Failed to initialize game board after loading.");
+                    return;
+                }
                 _gameController?.Dispose(); // clean up previous event subscription resources if not null
-                                            // create the GameController object only if null
-                _gameController ??= new GameController(_game, _gameState);
-                _gameController.PlaySavedGame();
+                _gameController ??= new GameController(_game, _gameState); // create the GameController object only if null
+                _gameController.PlaySavedGame(); // play the loaded game
             }
             else
             {

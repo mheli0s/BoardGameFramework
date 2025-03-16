@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic; // for List<> 
 using System.IO;   // for File operations
 using System.Linq;  // .Select() queries etc
+using System.Threading;
 using Framework.Enums;
 using Framework.Interfaces;
 namespace Framework.Core;
@@ -84,7 +85,7 @@ public class GameState
         _players = []; // create an initialized, empty list of players
 
         // create default save path that will be updated when Game is set
-        _serializedSnapshotFilename = Path.Combine(saveDirectory, "GameSnapshot.txt");
+        _serializedSnapshotFilename = Path.Combine(saveDirectory, "Snapshot.txt");
 
     }
 
@@ -97,7 +98,7 @@ public class GameState
         // create a cross-platform filesystem path format to save the file: '{GameType}-GameSnapshot.txt'
         // prepends the current game type to the default filename
         string savedGameType = game.GetType().Name ?? "UnknownGame";
-        _serializedSnapshotFilename = Path.Combine(saveDirectory, $"{savedGameType}-GameSnapshot.txt");
+        _serializedSnapshotFilename = Path.Combine(saveDirectory, $"{savedGameType}-Snapshot.txt");
     }
 
     // Set all game state elements to default initial value for a new game
@@ -172,13 +173,19 @@ public class GameState
             GameStatus = GameStatus,
             CurrentPlayerIndex = CurrentPlayerIndex,
             TurnNumber = TurnNumber,
-            _game = _game
         };
+
+        // ff the game exists, create a reference to it in the cloned state
+        if (_game != null)
+        {
+            // we need to keep the reference to the same game instance
+            clonedGameState._game = _game;
+        }
 
         return clonedGameState;
     }
 
-    internal void SaveGame() // TODO: use factory method pattern to call SaveGameToDisk()/etc?
+    internal void Save() // TODO: use factory method pattern to call SaveGameToDisk()/etc?
     {
         // Save the current board state when saving a game (not the full history):
         // When saving to disk, only persist the current GameState
@@ -189,26 +196,41 @@ public class GameState
                 Directory.CreateDirectory(saveDirectory);
             }
 
+            // extract the name of the class instance to prefix the saved filename with for filesystem transparency
             string gameTypeString = _game!.GetType().Name;
-            _serializedSnapshotFilename = $"{gameTypeString}-GameSnapshot.txt";
+
+            // remove the "Game" portion of the class for the saved name format
+            if (gameTypeString.EndsWith("Game"))
+            {
+                gameTypeString = gameTypeString.Substring(0, gameTypeString.Length - 4);
+            }
+
+            // set the saved game filename with a cross-platform format and the game type prepended
+            _serializedSnapshotFilename = Path.Combine(saveDirectory, $"{gameTypeString}-Snapshot.txt");
 
             // use the IGameSerialize interface for uniform serialization
             var serializedSnapshotData = _game?.Serialize();
 
+            // check if the state save failed, created an empty file
+            if (string.IsNullOrEmpty(serializedSnapshotData))
+            {
+                ConsoleUI.DisplayErrorMessage("Failed to serialize game data.");
+                return;
+            }
+
             // save file - overwrites contents since we only save one snapshot to disk at a time
             File.WriteAllText(_serializedSnapshotFilename, serializedSnapshotData ?? "");
-            ConsoleUI.DisplayInfoMessage($"Game saved successfully to {_serializedSnapshotFilename}.");
+            ConsoleUI.DisplayInfoMessage($"\nGame saved successfully to {_serializedSnapshotFilename}.");
         }
         catch (Exception e)
         {
-            ConsoleUI.DisplayErrorMessage($"Failed to save the current game: {e.Message}");
+            ConsoleUI.DisplayErrorMessage($"\nFailed to save the current game: {e.Message}");
         }
     }
 
     // deserialize a game state loaded from file to initialize the board with the parsed data, reset history 
-    internal void LoadGame()
+    internal void Load()
     {
-        // try to load the saved game file, and parse it into a game state, display errors if fails
         try
         {
             if (!File.Exists(_serializedSnapshotFilename))
@@ -217,49 +239,127 @@ public class GameState
                 return;
             }
 
-            string[] loadedGameSnapshot = File.ReadAllLines(_serializedSnapshotFilename);
-            if (_serializedSnapshotFilename.Length == 0)
+            string loadedGameData = File.ReadAllText(_serializedSnapshotFilename);
+            if (string.IsNullOrWhiteSpace(loadedGameData))
             {
-                ConsoleUI.DisplayErrorMessage("Loaded game is empty");
+                ConsoleUI.DisplayErrorMessage($"\nLoaded game file {_serializedSnapshotFilename} is empty");
+                Thread.Sleep(500);
                 return;
             }
 
             if (_game == null)
             {
-                ConsoleUI.DisplayErrorMessage("Game is not initialized. Please start a new game first.");
+                ConsoleUI.DisplayErrorMessage("\nGame is not initialized. Please start a new game first.");
                 return;
             }
 
-            // Reset current board's state data, but we reuse same players and board with the reset state
-            ResetGameState();
+            // deserialize the loaded snapshot file
+            _game.Deserialize(loadedGameData);
 
-            if (_game.Board == null)
-            {
-                ConsoleUI.DisplayErrorMessage("Board is not initialized.");
-                return;
-            }
+            // update the players list in GameState from the game's current players
+            _players = _game.Players.Select(p => p.Clone()).ToList();
 
+            // update the board snapshot to reflect the loaded state
             _boardSnapshot = _game.Board.Clone();
 
+            // refresh state references and board
+            SynchronizeReferences();
 
-            // Convert the loadedGameSnapshot array into a single string by concatenating each string
-            // in the array, delimited by newline chars, then deserialise the resulting joined string.
-            _game?.Deserialize(string.Join(Environment.NewLine, loadedGameSnapshot));
+            Console.Clear();
+            ConsoleUI.DisplayBoard(_game.Board);
+            ConsoleUI.DisplayInfoMessage($"\nSuccessfully loaded game from {_serializedSnapshotFilename}");
 
-            // display the loaded state on the console board if not null otherwise throw an error.
-            ConsoleUI.DisplayBoard(_game?.Board ?? throw new InvalidOperationException(
-                                                                    "Game uninitialized."));
-
-            // also reset the move history when loading a saved game
+            // clear move history
             _game.MoveHistory.ClearHistory();
-
-            ConsoleUI.DisplayInfoMessage($"Successfully loaded game from {_serializedSnapshotFilename}");
         }
-
         catch (Exception e)
         {
-            ConsoleUI.DisplayErrorMessage($"Couldn't load game: {e.Message}");
-            ResetGameState(); // re-initialize state if fail to load a saved game
+            ConsoleUI.DisplayErrorMessage($"\nCouldn't load game: {e.Message}");
+            if (e.StackTrace != null)
+            {
+                ConsoleUI.DisplayErrorMessage($"Stack trace: {e.StackTrace}");
+            }
+            // reset state
+            //ResetGameState();
+        }
+    }
+
+
+    // keep all current state references synced after any state update
+    public void SynchronizeReferences()
+    {
+        // ensure the game reference is set
+        if (_game == null) return;
+
+        // ensure player references are consistent
+        for (int i = 0; i < _players.Count && i < _game.Players.Count; i++)
+        {
+            // store a reference to both the source and target player for clarity
+            var sourcePlayer = _players[i];
+            var targetPlayer = _game.Players[i];
+
+            // ensure pieces owned by players are properly linked
+            foreach (var piece in sourcePlayer._remainingPieces)
+            {
+                piece.Owner = sourcePlayer;
+            }
+
+            // clear the target player's remaining pieces before copying
+            targetPlayer._remainingPieces.Clear();
+
+            // copy remaining pieces from source state to active game state - create new pieces rather than reference the old ones
+            foreach (var sourcePiece in sourcePlayer._remainingPieces)
+            {
+                // create a new piece with the same properties but owned by the target player
+                var newPiece = BoardGameFramework.GetFactory()
+                    .CreatePiece((int)sourcePiece.Value, targetPlayer);
+
+                // add the new piece to the target player's collection
+                targetPlayer._remainingPieces.Add(newPiece);
+            }
+        }
+
+        // update board state if needed
+        if (_boardSnapshot != null)
+        {
+            // ensure board squares are properly linked with pieces
+            for (int row = 0; row < _boardSnapshot.Size; row++)
+            {
+                for (int col = 0; col < _boardSnapshot.Size; col++)
+                {
+                    var sourceSquare = _boardSnapshot.GetSquare(row, col);
+                    var targetSquare = _game.Board.GetSquare(row, col);
+
+                    // first, clear the target square regardless of whether we're setting a new piece
+                    targetSquare.ResetSquare();
+
+                    // only attempt to place a piece if the source square has one
+                    if (sourceSquare.IsOccupied && sourceSquare.Piece != null)
+                    {
+                        var sourcePiece = sourceSquare.Piece;
+                        var owner = _game.Players.FirstOrDefault(p => p.Id == sourcePiece.Owner.Id);
+
+                        if (owner != null)
+                        {
+                            try
+                            {
+                                // create a new piece with the correct type and properties
+                                var newPiece = BoardGameFramework.GetFactory()
+                                    .CreatePiece((int)sourcePiece.Value, owner);
+
+                                // use the explicit interface to ensure type compatibility -
+                                // utilizes the internal type checking in the SetPiece method
+                                ((IBoardSquare)targetSquare).SetPiece(newPiece);
+                            }
+                            catch (ArgumentException ex)
+                            {
+                                // log the error but continue with synchronization
+                                Console.WriteLine($"Error synchronizing piece at [{row},{col}]: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

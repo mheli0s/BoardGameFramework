@@ -10,5 +10,5 @@ public class NumTicTacToePiece(int value, Player owner) : IPiece
     // properties
     public int Value { get; } = value; // the specific Numerical TicTacToe piece's integer value
     object IPiece.Value => Value; // explicit Value implementation (IPiece.Value)
-    public Player Owner { get; private set; } = owner;
+    public Player Owner { get; set; } = owner;
 }

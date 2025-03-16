@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using Framework.Enums;
 using Framework.Interfaces;
@@ -60,7 +61,7 @@ namespace Framework.Core
                 ConsoleUI.DisplayMovePrompt(_gameState.GetCurrentPlayer());
 
                 Player currentPlayer = _gameState.GetCurrentPlayer();
-                ProcessTurn(currentPlayer);
+                ProcessTurn(ref currentPlayer);
 
                 // check for game-end conditions
                 currentGameStatus = _gameState.GetGameStatus();
@@ -79,8 +80,10 @@ namespace Framework.Core
         }
 
         // get and make a move based on player type, add it to history, update state, handle game-over
-        private void ProcessTurn(Player currentPlayer)
+        private void ProcessTurn(ref Player currentPlayer)
         {
+            currentPlayer = _game.Players[_gameState.CurrentPlayerIndex];
+
             string input = ConsoleUI.GetUserInput();
 
             if (InputValidator.IsEmptyInput(input))
@@ -91,10 +94,25 @@ namespace Framework.Core
 
             // process moves and commands input by user
             IMove? move = ProcessGameCommands(input, currentPlayer);
+
             if (move == null) return; // if null returned then a command was input, thus no move to make
             /* Player logic determines if move is AI-generated (computer) or input via console for a human.
                If a human player is still doing undo/redo operations, skip computer turn until finished. */
             if (isUndoRedoActive && currentPlayer.Type == PlayerType.COMPUTER) return;
+
+            if (currentPlayer is HumanPlayer)
+            {
+                // skip - move has already been processed by ProcessGameCommands
+            }
+            else if (currentPlayer is ComputerPlayer computerPlayer)
+            {
+                // if the player is a computer player, generate a move
+                move = computerPlayer.GetMove(_game.Board);
+            }
+            else
+            {
+                throw new InvalidOperationException("Player type not supported");
+            }
 
             // make the make and return a boolean to see if it was a valid move
             bool successfulMove = _game.MakeMove(move);
@@ -112,18 +130,6 @@ namespace Framework.Core
                 _gameState.UpdateStateAfterMove(_game); // update game state after move 
                 _game.MoveHistory.AddMoveToHistory(move, _gameState); // add to move history for undo/redo
                 ConsoleUI.DisplayBoard(_game.Board); // update board with new move
-
-                // // check if game over and handle it otherwise switch turns to other player  
-                // GameStatus gameStatus = _gameState.GetGameStatus();
-
-                // if (gameStatus == GameStatus.WON || gameStatus == GameStatus.DRAW)
-                // {
-                //     ProcessGameOver(gameStatus, currentPlayer);
-                //     return;
-                // }
-
-                // else if (gameStatus == GameStatus.IN_PROGRESS)
-                // {
 
                 SwitchTurn();
 
@@ -185,10 +191,12 @@ namespace Framework.Core
                 case 'm':
                     return ProcessMove(input, currentPlayer);
                 case 'u':
+                    ConsoleUI.DisplayInfoMessage("\nPress 'u' until done then press 'f' to continue playing.\n");
                     isUndoRedoActive = true;
                     UndoMove();
                     return null;
                 case 'r':
+                    ConsoleUI.DisplayInfoMessage("\nPress 'r' until done then press 'f' to continue playing.\n");
                     isUndoRedoActive = true;
                     RedoMove();
                     return null;
@@ -197,6 +205,11 @@ namespace Framework.Core
                     return null;
                 case 'h':
                     ConsoleUI.DisplayFrameworkHelp();
+                    Console.Clear();
+                    ConsoleUI.DisplayBoard(_game.Board);
+                    return null;
+                case 'f':
+                    EndUndoRedoMode();
                     return null;
                 case 'q':
                     QuitGame();
@@ -235,9 +248,43 @@ namespace Framework.Core
         // remove move from history via move index, return updated state and refresh the board
         private void UndoMove()
         {
-            _gameState = _game.MoveHistory.UndoMove();
-            var clonedGameState = _gameState.Clone();
-            if (clonedGameState?.Game?.Board != null) _game.Board = clonedGameState.Game.Board;
+            // get the move that needs to be undone
+            var moveToUndo = _game.MoveHistory.GetCurrentMove();
+
+            // Only update the specific square affected by this move
+            if (moveToUndo != null)
+            {
+                // get the square where the piece was placed
+                var square = _game.Board.GetSquare(moveToUndo.Row, moveToUndo.Col);
+
+                // remove the piece from this square only
+                var removedPiece = square.RemovePiece();
+
+                // return the piece to the player's available pieces if needed
+                if (removedPiece != null)
+                {
+                    var owner = removedPiece.Owner;
+                    _game.Players.FirstOrDefault(p => p == owner)?._remainingPieces.Add(removedPiece);
+                }
+
+                // get updated state from history (for turn management)
+                GameState previousState = _game.MoveHistory.Undo();
+
+                // only update the game state reference and player turn
+                _gameState = previousState;
+            }
+            else
+            {
+                ConsoleUI.DisplayErrorMessage("\nNo further moves in history to undo.");
+            }
+
+            // If we've undone all moves
+            if (_game.MoveHistory.GetCurrentMoveIndex() < 0)
+            {
+                EndUndoRedoMode();
+            }
+
+            // clear the console and redisplay the board to show the changes
             Console.Clear();
             ConsoleUI.DisplayBoard(_game.Board);
         }
@@ -245,18 +292,119 @@ namespace Framework.Core
         // re-apply undone move to history, return updated state and refresh the board
         private void RedoMove()
         {
-            _gameState = _game.MoveHistory.RedoMove();
-            var clonedGameState = _gameState.Clone();
-            if (clonedGameState?.Game?.Board != null) _game.Board = clonedGameState.Game.Board;
+            // exit if there are no moves to redo
+            if (_game.MoveHistory.GetCurrentMoveIndex() >= _game.MoveHistory.GetMoveCount() - 1)
+            {
+                ConsoleUI.DisplayErrorMessage("\nNo more moves to redo.");
+                return;
+            }
+
+            // get the move that needs to be redone from history
+            GameState nextState = _game.MoveHistory.Redo();
+
+            // only proceed if we have a valid state to redo to
+            if (nextState != null)
+            {
+                // after successfully redoing the move and updating the state
+                _gameState = nextState;
+
+                // clear and redisplay the board to show the changes
+                Console.Clear();
+                ConsoleUI.DisplayBoard(_game.Board);
+
+
+                // get the move that was redone (after advancing the move index)
+                var moveToRedo = _game.MoveHistory.GetCurrentMove();
+
+                if (moveToRedo != null)
+                {
+                    // get the square where the piece should be placed
+                    var square = _game.Board.GetSquare(moveToRedo.Row, moveToRedo.Col);
+
+                    // before placing a piece, make sure the square is empty
+                    if (!square.IsOccupied)
+                    {
+                        // get the player who made this move
+                        var player = _game.Players.FirstOrDefault(p => p == moveToRedo.Owner);
+
+                        if (player != null)
+                        {
+                            // find the piece with the matching value in the player's remaining pieces
+                            var pieceToPlace = player._remainingPieces
+                                .FirstOrDefault(p => p.Value == moveToRedo.Value);
+
+                            if (pieceToPlace != null)
+                            {
+                                // remove the piece from player's available pieces
+                                player._remainingPieces.Remove(pieceToPlace);
+
+                                // place the piece on the board
+                                square.SetPiece(pieceToPlace);
+                            }
+                        }
+                    }
+
+                    // update the game state reference
+                    _gameState = nextState;
+
+                    // update the current player
+                    _gameState.CurrentPlayerIndex = _game.MoveHistory.GetCurrentMoveIndex() % _game.Players.Count;
+
+                    // clear and redisplay the board to show the changes
+                    Console.Clear();
+                    ConsoleUI.DisplayBoard(_game.Board);
+                    ConsoleUI.DisplayPlayerTurnPrompt(_game.Players[_gameState.CurrentPlayerIndex]);
+
+                    // call ProcessTurn to update the current player
+                    //ProcessTurn(ref _game.Players[_gameState.CurrentPlayerIndex]);
+
+                }
+            }
+
+            if (_game.MoveHistory.GetCurrentMoveIndex() >= _game.MoveHistory.GetMoveCount() - 1)
+            {
+                isUndoRedoActive = false; // Reset the flag when done with redo operations
+            }
+
+            // clear the console and redisplay the board to show the changes
             Console.Clear();
             ConsoleUI.DisplayBoard(_game.Board);
+
+            // check if we're done with redos
+            if (_game.MoveHistory.GetCurrentMoveIndex() >= _game.MoveHistory.GetMoveCount() - 1)
+            {
+                EndUndoRedoMode();
+            }
         }
+
+        // utility for undo and redo methods
+        private void EndUndoRedoMode()
+        {
+            isUndoRedoActive = false;
+
+            _gameState.SynchronizeReferences(); // refresh references to keep all state objects in sync
+
+            // ensure player states are properly synchronized with the game state
+            if (_gameState != null && _game != null)
+            {
+                Console.Clear();
+                ConsoleUI.DisplayBoard(_game.Board);
+                Player currentPlayer = _gameState.GetCurrentPlayer();
+                ConsoleUI.DisplayPlayerTurnPrompt(currentPlayer);
+
+                // If the active player is a computer, auto-process its move
+                if (currentPlayer.Type == PlayerType.COMPUTER)
+                {
+                    ProcessComputerTurn(currentPlayer);
+                }
+            }
+        }
+
 
         // takes a snapshot of the current game state to save to a file on disk or other location formats
         private void SaveGame()
         {
-            _gameState.SaveGame();
-            ConsoleUI.DisplayInfoMessage("Game saved successfully.");
+            _gameState.Save();
         }
 
         // quit the current game and return to the main menu

@@ -32,18 +32,19 @@ public class MoveHistory(GameState gameState)
             _moveLog.RemoveRange(_currentMoveIndex + 1, _moveLog.Count - _currentMoveIndex - 1);
         }
 
-        move.MoveNumber = _moveLog.Count + 1; // current number of moves in 1-based indexing
-        _moveLog.Add((move, updatedState.Clone())); // add the new Move/State tuple to the history
+        move.MoveNumber = _moveLog.Count + 1; // set current number of moves in 1-based indexing
+        GameState clonedState = updatedState.Clone(); // create deep copy of current state
+        _moveLog.Add((move, clonedState)); // add the new Move/State tuple to the history
         _currentMoveIndex = _moveLog.Count - 1; // update move index via 0-based indexing
     }
 
     // Undo a move by returning to previous move's state as far back as the initial state before any moves
-    internal GameState UndoMove()
+    internal GameState Undo()
     {
         // no moves made yet
         if (_currentMoveIndex < 0)
         {
-            ConsoleUI.DisplayErrorMessage("No moves in history.");
+            ConsoleUI.DisplayErrorMessage("No moves in history to undo.");
             return _initialGameState;
         }
 
@@ -61,7 +62,7 @@ public class MoveHistory(GameState gameState)
     }
 
     // reapplies a move previously undone until reaching the last move in history (all undone moves reapplied)
-    internal GameState RedoMove()
+    internal GameState Redo()
     {
         if (_currentMoveIndex < _moveLog.Count - 1)
         {
@@ -85,10 +86,17 @@ public class MoveHistory(GameState gameState)
     }
 
     // utility to return the current Move object instance
-    internal IMove GetCurrentMove()
+    internal IMove? GetCurrentMove()
     {
         _currentMoveIndex = GetCurrentMoveIndex();
-        return _moveLog[_currentMoveIndex].Move;
+
+        // check if there are any moves in history
+        if (_currentMoveIndex >= 0 && _currentMoveIndex < _moveLog.Count)
+        {
+            return _moveLog[_currentMoveIndex].Move;
+        }
+
+        return null; // return null if no moves in history    
     }
 
     // utility to return the total current moves made
