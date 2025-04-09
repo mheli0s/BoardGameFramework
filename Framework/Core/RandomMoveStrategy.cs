@@ -43,20 +43,17 @@ internal class RandomMoveStrategy : IMoveStrategy
             .Where(value => !usedPieces.Contains(value)) // exclude pieces already on board
             .ToList();
 
-        if (!availablePieces.Any())
+        if (availablePieces.Count == 0)
         {
             throw new InvalidOperationException("No valid pieces left to generate moves.");
         }
 
         var selectedSquare = availableSquares[_random.Next(availableSquares.Count)];
         var selectedValue = availablePieces[_random.Next(availablePieces.Count)];
-        var selectedPiece = BoardGameFramework.GetFactory().CreatePiece(selectedValue, player);
+        var selectedPiece = BoardGameFramework.GetFactory().CreatePiece(selectedValue, player) ??
+                                throw new InvalidOperationException($"Failed to create a piece for value {selectedValue}.");
 
-        if (selectedPiece == null)
-        {
-            throw new InvalidOperationException($"Failed to create a piece for value {selectedValue}.");
-        }
-
+        // parse the move into a string array of its parts with the selected square and piece value
         string[] moveParts =
         [
             "m",
