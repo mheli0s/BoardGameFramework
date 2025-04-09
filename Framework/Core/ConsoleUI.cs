@@ -106,7 +106,7 @@ public class ConsoleUI
         int boardStartRow = Console.CursorTop + 10; // move the board down 2 lines
         Console.SetCursorPosition(0, boardStartRow);
         Console.Write("\nEnter a move - 'm <row col value>' or command. ");
-        Console.WriteLine($"Starting pieces: {string
+        Console.WriteLine($"Available pieces: {string
                                     .Join(", ", currentPlayer._remainingPieces.Select(p => p.Value))}");
         Console.Write(">>> ");
         Console.ResetColor();
